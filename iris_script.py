@@ -15,7 +15,6 @@ num_trees = 10  # Specify the number of trees for the random forest
 spark = SparkSession.builder.appName("IrisModelEvaluation").getOrCreate()
 
 # Load the Iris dataset
-# iris_df = spark.read.csv("iris1.csv", header=True, inferSchema=True)
 iris_df=spark.read.load("file:///home/u1/Iris1.csv",format="csv",sep=",",inferSchema="true", header="true")
 
 # Assuming 'features' is a vector containing your input features and 'species' is the target variable
@@ -47,6 +46,12 @@ predictions = trained_model.transform(testData)
 evaluator = MulticlassClassificationEvaluator(metricName=metric_name)
 metric_value = evaluator.evaluate(predictions)
 print(f"{model_type.capitalize()} Model - {metric_name.capitalize()}: {metric_value:.4f}")
+
+# Write the result to a file
+result_file_path = "result.txt"
+with open(result_file_path, "w") as result_file:
+    result_file.write(f"{model_type.capitalize()} Model - {metric_name.capitalize()}: {metric_value:.4f}")
+`
 
 # Stop the Spark session
 spark.stop()
