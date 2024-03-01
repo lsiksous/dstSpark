@@ -15,15 +15,24 @@ num_trees = 10  # Specify the number of trees for the random forest
 spark = SparkSession.builder.appName("IrisModelEvaluation").getOrCreate()
 
 # Load the Iris dataset
-iris_df=spark.read.load("file:///home/u1/Iris1.csv",format="csv",sep=",",inferSchema="true", header="true")
+iris_df = spark.read.csv("file:///home/u1/Iris1.csv", header=True, inferSchema=True)
 
 # Assuming 'features' is a vector containing your input features and 'species' is the target variable
 assembler = VectorAssembler(inputCols=iris_df.columns[:-1], outputCol="features")
 indexer = StringIndexer(inputCol="species", outputCol="label")
-iris_df = assembler.transform(indexer.transform(iris_df))
+stages = [assembler, indexer]
+
+# Create a pipeline
+pipeline = Pipeline(stages=stages)
+
+# Fit the pipeline to the data
+pipeline_model = pipeline.fit(iris_df)
+
+# Transform the data
+iris_df_transformed = pipeline_model.transform(iris_df)
 
 # Split the data into training and testing sets
-(trainingData, testData) = iris_df.randomSplit([split_ratio, 1 - split_ratio], seed=123)
+(trainingData, testData) = iris_df_transformed.randomSplit([split_ratio, 1 - split_ratio], seed=123)
 
 # Create the specified ML model
 if model_type == "neural_network":
@@ -33,8 +42,11 @@ elif model_type == "decision_tree":
 elif model_type == "random_forest":
     model = RandomForestClassifier(featuresCol="features", labelCol="label", numTrees=num_trees)
 
-# Create a pipeline
-pipeline = Pipeline(stages=[model])
+# Add the model to the pipeline stages
+stages.append(model)
+
+# Create a new pipeline with the added model
+pipeline = Pipeline(stages=stages)
 
 # Fit the model
 trained_model = pipeline.fit(trainingData)
@@ -47,11 +59,11 @@ evaluator = MulticlassClassificationEvaluator(metricName=metric_name)
 metric_value = evaluator.evaluate(predictions)
 print(f"{model_type.capitalize()} Model - {metric_name.capitalize()}: {metric_value:.4f}")
 
-# Write the result to a file
+# Write the result to a file in the context of Spark session
 result_file_path = "result.txt"
-with open(result_file_path, "w") as result_file:
-    result_file.write(f"{model_type.capitalize()} Model - {metric_name.capitalize()}: {metric_value:.4f}")
-`
+result_df = spark.createDataFrame([(f"{model_type.capitalize()} Model - {metric_name.capitalize()}", metric_value)])
+result_df.coalesce(1).write.text(result_file_path)
 
 # Stop the Spark session
 spark.stop()
+
