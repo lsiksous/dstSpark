@@ -9,30 +9,25 @@ model_type = "neural_network"  # Options: "neural_network", "decision_tree", "ra
 metric_name = "accuracy"  # Options: "f1", "accuracy", "weightedRecall", "weightedPrecision"
 split_ratio = 0.8
 layers = [4, 5, 3]  # Specify layers for the neural network (input features, hidden layer, output classes)
-num_trees = 10  # Specify the number of trees for the random forest
+num_trees = 40  # Specify the number of trees for the random forest
 
 # Create a Spark session
 spark = SparkSession.builder.appName("IrisModelEvaluation").getOrCreate()
 
 # Load the Iris dataset
-iris_df = spark.read.csv("file:///home/u1/Iris1.csv", header=True, inferSchema=True)
+iris_df=spark.read.load("file:///home/u1/Iris1.csv",format="csv",sep=",",inferSchema="tru e", header="true")
+
 
 # Assuming 'features' is a vector containing your input features and 'species' is the target variable
 assembler = VectorAssembler(inputCols=iris_df.columns[:-1], outputCol="features")
+data = assembler.transform(df)
 indexer = StringIndexer(inputCol="species", outputCol="label")
-stages = [assembler, indexer]
+index_model = indexer.fit(data)
 
-# Create a pipeline
-pipeline = Pipeline(stages=stages)
-
-# Fit the pipeline to the data
-pipeline_model = pipeline.fit(iris_df)
-
-# Transform the data
-iris_df_transformed = pipeline_model.transform(iris_df)
+data_indexed = index_model.transform(data)
 
 # Split the data into training and testing sets
-(trainingData, testData) = iris_df_transformed.randomSplit([split_ratio, 1 - split_ratio], seed=123)
+trainingData, testData = data_indexed.randomSplit([split_ratio, 1 - split_ratio],0.0)
 
 # Create the specified ML model
 if model_type == "neural_network":
@@ -42,14 +37,9 @@ elif model_type == "decision_tree":
 elif model_type == "random_forest":
     model = RandomForestClassifier(featuresCol="features", labelCol="label", numTrees=num_trees)
 
-# Add the model to the pipeline stages
-stages.append(model)
-
-# Create a new pipeline with the added model
-pipeline = Pipeline(stages=stages)
 
 # Fit the model
-trained_model = pipeline.fit(trainingData)
+trained_model = model.fit(trainingData)
 
 # Make predictions on the test set
 predictions = trained_model.transform(testData)
@@ -59,11 +49,5 @@ evaluator = MulticlassClassificationEvaluator(metricName=metric_name)
 metric_value = evaluator.evaluate(predictions)
 print(f"{model_type.capitalize()} Model - {metric_name.capitalize()}: {metric_value:.4f}")
 
-# Write the result to a file in the context of Spark session
-result_file_path = "result.txt"
-result_df = spark.createDataFrame([(f"{model_type.capitalize()} Model - {metric_name.capitalize()}", metric_value)])
-result_df.coalesce(1).write.text(result_file_path)
-
 # Stop the Spark session
 spark.stop()
-
