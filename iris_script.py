@@ -15,7 +15,8 @@ num_trees = 10  # Specify the number of trees for the random forest
 spark = SparkSession.builder.appName("IrisModelEvaluation").getOrCreate()
 
 # Load the Iris dataset
-iris_df = spark.read.csv("iris1.csv", header=True, inferSchema=True)
+# iris_df = spark.read.csv("iris1.csv", header=True, inferSchema=True)
+iris_df=spark.read.load("file:///home/u1/Iris1.csv",format="csv",sep=",",inferSchema="true", header="true")
 
 # Assuming 'features' is a vector containing your input features and 'species' is the target variable
 assembler = VectorAssembler(inputCols=iris_df.columns[:-1], outputCol="features")
